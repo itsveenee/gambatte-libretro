@@ -160,6 +160,12 @@ public:
 	void setEndtime(unsigned long cc, unsigned long inc);
 	void setSoundBuffer(uint_least32_t *buf, std::size_t size) { psg_.setBuffer(buf, size); }
 	std::size_t fillSoundBuffer(unsigned long cc);
+   /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908: SGB-only fused delta integration + exact 64:1 box output. */
+   std::size_t fillSoundBufferSgb64(unsigned long cc) {
+      psg_.generateSamples(cc, isDoubleSpeed());
+      return psg_.fillBufferSgb64();
+   }
+   void clearSgbAudioDecimator() { psg_.clearSgbDecimator(); }
 
 	void setVideoBuffer(video_pixel_t *videoBuf, std::ptrdiff_t pitch) {
 		lcd_.setVideoBuffer(videoBuf, pitch);

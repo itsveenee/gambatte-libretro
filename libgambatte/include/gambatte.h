@@ -88,6 +88,14 @@ public:
    unsigned long runForClocks(gambatte::video_pixel_t *videoBuf, int pitch,
          gambatte::uint_least32_t *soundBuf, std::size_t soundBufSize,
          unsigned long clocks, unsigned &samples);
+
+   /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908
+    * Aurora SGB-only entry point. Same CPU/video timing as runForClocks(),
+    * but returns the exact existing 64-raw-frame box-decimated PSG stream. */
+   unsigned long runForClocksSgb64(gambatte::video_pixel_t *videoBuf, int pitch,
+         gambatte::uint_least32_t *soundBuf, std::size_t soundBufSize,
+         unsigned long clocks, unsigned &samples);
+   void clearSgbAudioDecimator();
 	
 	/** Reset to initial state.
 	  * Equivalent to reloading a ROM image, or turning a Game Boy Color off and on again.

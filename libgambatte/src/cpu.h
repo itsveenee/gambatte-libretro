@@ -103,6 +103,9 @@ public:
 #endif
 	void setSoundBuffer(uint_least32_t *buf, std::size_t size) { mem_.setSoundBuffer(buf, size); }
 	std::size_t fillSoundBuffer() { return mem_.fillSoundBuffer(cycleCounter_); }
+   /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908 */
+   std::size_t fillSoundBufferSgb64() { return mem_.fillSoundBufferSgb64(cycleCounter_); }
+   void clearSgbAudioDecimator() { mem_.clearSgbAudioDecimator(); }
 	bool isCgb() const { return mem_.isCgb(); }
 
 	void setDmgPaletteColor(int palNum, int colorNum, unsigned long rgb32) {

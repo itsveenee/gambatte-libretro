@@ -51,6 +51,9 @@ namespace gambatte
       ,  soVol_(0)
       ,  rsum_(0x8000) // initialize to 0x8000 to prevent borrows from high word, xor away later
       ,  enabled_(false)
+      ,  sgbDecimCount_(0) /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908 */
+      ,  sgbDecimLeft_(0)
+      ,  sgbDecimRight_(0)
    {
    }
 
@@ -66,6 +69,7 @@ namespace gambatte
       ch2_.reset();
       ch3_.reset();
       ch4_.reset();
+      clearSgbDecimator(); /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908 */
    }
 
    void PSG::setStatePtrs(SaveState &state)
@@ -92,6 +96,7 @@ namespace gambatte
       setSoVolume(state.mem.ioamhram.get()[0x124]);
       mapSo(state.mem.ioamhram.get()[0x125]);
       enabled_ = state.mem.ioamhram.get()[0x126] >> 7 & 1;
+      clearSgbDecimator(); /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908: host audio phase is deliberately transient. */
    }
 
    void PSG::accumulateChannels(const unsigned long cycles)
@@ -169,6 +174,61 @@ namespace gambatte
       rsum_ = sum;
 
       return bufferPos_;
+   }
+
+   /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908
+    * Equivalent to Aurora's former pipeline:
+    *   PSG::fillBuffer() -> GBHost 64-frame signed L/R box average.
+    *
+    * We still integrate EVERY PSG delta (required for exact audio), but only
+    * store one averaged frame per 64 raw frames. This removes the full-rate
+    * reconstructed-buffer write + second full-rate host read pass.
+    * Incomplete 64-frame groups are carried exactly across runForClocks calls.
+    */
+   size_t PSG::fillBufferSgb64()
+   {
+      uint_least32_t sum = rsum_;
+      uint_least32_t *src = buffer_;
+      uint_least32_t *dst = buffer_;
+      unsigned n = bufferPos_;
+      unsigned count = sgbDecimCount_;
+      long leftSum = sgbDecimLeft_;
+      long rightSum = sgbDecimRight_;
+      size_t out = 0;
+
+      while (n--)
+      {
+         uint_least32_t packed;
+         int left, right;
+
+         sum += *src++;
+         packed = sum ^ 0x8000;
+
+         left = (int)(packed & 0xffffU);
+         if (left & 0x8000) left -= 0x10000;
+         right = (int)((packed >> 16) & 0xffffU);
+         if (right & 0x8000) right -= 0x10000;
+
+         leftSum += left;
+         rightSum += right;
+         if (++count == 64U)
+         {
+            int outLeft = (int)(leftSum / 64L);
+            int outRight = (int)(rightSum / 64L);
+            *dst++ = (uint_least32_t)((unsigned)outLeft & 0xffffU) |
+                     ((uint_least32_t)((unsigned)outRight & 0xffffU) << 16);
+            ++out;
+            count = 0;
+            leftSum = 0;
+            rightSum = 0;
+         }
+      }
+
+      rsum_ = sum;
+      sgbDecimCount_ = count;
+      sgbDecimLeft_ = leftSum;
+      sgbDecimRight_ = rightSum;
+      return out;
    }
 
 #ifdef WORDS_BIGENDIAN

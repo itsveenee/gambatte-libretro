@@ -68,6 +68,23 @@ unsigned long GB::runForClocks(
    samples = p_->cpu.fillSoundBuffer();
    return p_->cpu.lastRunCycles();
 }
+
+/* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908 */
+unsigned long GB::runForClocksSgb64(
+      gambatte::video_pixel_t *const videoBuf, const int pitch,
+      gambatte::uint_least32_t *const soundBuf, std::size_t soundBufSize,
+      const unsigned long clocks, unsigned &samples) {
+   (void)videoBuf;
+   (void)pitch;
+   p_->cpu.setSoundBuffer(soundBuf, soundBufSize);
+   p_->cpu.runFor(clocks);
+   samples = (unsigned)p_->cpu.fillSoundBufferSgb64();
+   return p_->cpu.lastRunCycles();
+}
+
+void GB::clearSgbAudioDecimator() {
+   p_->cpu.clearSgbAudioDecimator();
+}
    
 void GB::Priv::full_init(bool const clearSram) {
    SaveState state;

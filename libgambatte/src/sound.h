@@ -41,6 +41,9 @@ public:
 	void generateSamples(unsigned long cycleCounter, bool doubleSpeed);
 	void resetCounter(unsigned long newCc, unsigned long oldCc, bool doubleSpeed);
    std::size_t fillBuffer();
+   /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908: exact old Aurora 64-frame box filter fused with delta integration. */
+   std::size_t fillBufferSgb64();
+   void clearSgbDecimator() { sgbDecimCount_ = 0; sgbDecimLeft_ = 0; sgbDecimRight_ = 0; }
 	void setBuffer(uint_least32_t *buf, std::size_t size) { buffer_ = buf; bufferSize_ = size; bufferPos_ = 0; }
 
 	bool isEnabled() const { return enabled_; }
@@ -86,6 +89,10 @@ private:
 	unsigned long soVol_;
 	uint_least32_t rsum_;
 	bool enabled_;
+   /* AURORA_V6_RUNTIME_EFFECT_ALL5_20260908: transient output-filter state; not part of emulated GB state. */
+   unsigned sgbDecimCount_;
+   long sgbDecimLeft_;
+   long sgbDecimRight_;
 
 	void accumulateChannels(unsigned long cycles);
 };
