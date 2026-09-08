@@ -23,7 +23,9 @@
 #include <algorithm>
 #include "gambatte_log.h"
 
-extern void cartridge_set_rumble(unsigned active);
+static inline void cartridge_set_rumble(unsigned active) {
+   (void)active;
+} /* AURORA_SGB_GAMBATTE_RUMBLE_LINKFIX_V1_1_2_20260907 */
 
 namespace gambatte
 {

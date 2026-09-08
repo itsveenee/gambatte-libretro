@@ -52,6 +52,22 @@ long GB::runFor(gambatte::video_pixel_t *const videoBuf, const int pitch,
 	
 	return cyclesSinceBlit < 0 ? cyclesSinceBlit : static_cast<long>(samples) - (cyclesSinceBlit >> 1);
 }
+
+/* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907 */
+unsigned long GB::runForClocks(
+      gambatte::video_pixel_t *const videoBuf, const int pitch,
+      gambatte::uint_least32_t *const soundBuf, std::size_t soundBufSize,
+      const unsigned long clocks, unsigned &samples) {
+   /* AURORA_SGB_GAMBATTE_VIDEO_PERF_FIX_V1_1_3_20260907
+    * Video is attached persistently by setSgbVideoBuffer(). Reattaching here
+    * resets PPUFrameBuf::fbline_ to the null scratch row mid-scanline. */
+   (void)videoBuf;
+   (void)pitch;
+   p_->cpu.setSoundBuffer(soundBuf, soundBufSize);
+   p_->cpu.runFor(clocks);
+   samples = p_->cpu.fillSoundBuffer();
+   return p_->cpu.lastRunCycles();
+}
    
 void GB::Priv::full_init(bool const clearSram) {
    SaveState state;
@@ -99,6 +115,22 @@ void GB::setInputGetter(InputGetter *getInput) {
 	p_->cpu.setInputGetter(getInput);
 }
 
+void GB::setSgbJoypCallback(SgbJoypCallback callback, void *userdata) {
+   p_->cpu.setSgbJoypCallback(callback, userdata);
+}
+
+void GB::setSgbVideoBuffer(gambatte::video_pixel_t *videoBuf, int pitch) {
+   p_->cpu.setVideoBuffer(videoBuf, pitch);
+}
+
+bool GB::savedataDirty() const {
+   return p_->cpu.savedataDirty();
+}
+
+void GB::clearSavedataDirty() {
+   p_->cpu.clearSavedataDirty();
+}
+
 void GB::setBootloaderGetter(bool (*getter)(void* userdata, bool isgbc, uint8_t* data, uint32_t max_size)) {
    p_->cpu.mem_.bootloader.set_bootloader_getter(getter);
 }
@@ -120,6 +152,7 @@ int GB::load(const void *romdata, unsigned romsize, const unsigned flags) {
    if (!failed) {
       p_->gbaCgbMode = flags & GBA_CGB;
       p_->full_init();
+      p_->cpu.clearSavedataDirty(); /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907 */
       p_->stateNo = 1;
    }
 	

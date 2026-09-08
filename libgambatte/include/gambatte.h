@@ -75,6 +75,13 @@ public:
 	  */
 	long runFor(gambatte::video_pixel_t *videoBuf, int pitch,
 			gambatte::uint_least32_t *soundBuf, std::size_t soundBufSize, unsigned &samples);
+
+   /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907
+    * External-SFC clock entry point. Returns actual normal-GB clocks used;
+    * Aurora keeps any instruction-boundary overshoot as scheduler credit. */
+   unsigned long runForClocks(gambatte::video_pixel_t *videoBuf, int pitch,
+         gambatte::uint_least32_t *soundBuf, std::size_t soundBufSize,
+         unsigned long clocks, unsigned &samples);
 	
 	/** Reset to initial state.
 	  * Equivalent to reloading a ROM image, or turning a Game Boy Color off and on again.
@@ -88,6 +95,18 @@ public:
 
 	/** Sets the callback used for getting input state. */
 	void setInputGetter(InputGetter *getInput);
+
+   /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907
+    * FF00/P14/P15 bridge used only by Aurora's external SGB ICD. */
+   typedef unsigned char (*SgbJoypCallback)(
+         void *userdata, unsigned char p14p15, bool write);
+   void setSgbJoypCallback(SgbJoypCallback callback, void *userdata);
+
+   /* AURORA_SGB_GAMBATTE_VIDEO_PERF_FIX_V1_1_3_20260907 */
+   void setSgbVideoBuffer(gambatte::video_pixel_t *videoBuf, int pitch);
+
+   bool savedataDirty() const;
+   void clearSavedataDirty();
    
    /** Sets the callback used for getting the bootloader data. */
    void setBootloaderGetter(bool (*getter)(void *userdata, bool isgbc, uint8_t *data, uint32_t buf_size));

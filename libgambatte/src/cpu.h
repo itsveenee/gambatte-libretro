@@ -33,6 +33,7 @@ class CPU {
 public:
 	CPU();
 	long runFor(unsigned long cycles);
+   unsigned long lastRunCycles() const { return lastRunCycles_; }
 	void setStatePtrs(SaveState &state);
 	void saveState(SaveState &state);
 	void loadState(SaveState const &state);
@@ -65,6 +66,15 @@ public:
 	void setInputGetter(InputGetter *getInput) {
 		mem_.setInputGetter(getInput);
 	}
+
+   void setSgbJoypCallback(
+         unsigned char (*callback)(void *, unsigned char, bool),
+         void *userdata) {
+      mem_.setSgbJoypCallback(callback, userdata);
+   }
+
+   bool savedataDirty() const { return mem_.savedataDirty(); }
+   void clearSavedataDirty() { mem_.clearSavedataDirty(); }
 #ifdef HAVE_NETWORK
 	void setSerialIO(SerialIO *serial_io) {
 		mem_.setSerialIO(serial_io);
@@ -100,6 +110,7 @@ public:
 	Memory mem_;
 private:
 	unsigned long cycleCounter_;
+   unsigned long lastRunCycles_; /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907 */
 	unsigned short pc_;
 	unsigned short sp;
 	unsigned hf1, hf2, zf, cf;

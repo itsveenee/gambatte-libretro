@@ -32,6 +32,9 @@ Memory::Memory(Interrupter const &interrupter) :
 , serialize_is_fastcgb_(false),
 #endif
    getInput_(0)
+, sgbJoypCallback_(0) /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907 */
+, sgbJoypUser_(0)
+, saveDataDirty_(false)
 #ifdef HAVE_NETWORK
 , serial_io_(0)
 #endif
@@ -448,7 +451,13 @@ unsigned long Memory::resetCounters(unsigned long cc) {
 void Memory::updateInput() {
 	unsigned state = 0xF;
 
-	if ((ioamhram_[0x100] & 0x30) != 0x30 && getInput_) {
+   /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907
+    * ICD owns the low nibble in SGB mode. Reads are pure; packet parser state
+    * advances only on actual FF00 writes below. */
+   if (sgbJoypCallback_) {
+      state = sgbJoypCallback_(
+            sgbJoypUser_, ioamhram_[0x100] & 0x30, false) & 0x0F;
+   } else if ((ioamhram_[0x100] & 0x30) != 0x30 && getInput_) {
 		unsigned input = (*getInput_)();
 		unsigned dpad_state = ~input >> 4;
 		unsigned button_state = ~input;
@@ -673,7 +682,18 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 
 	switch (p & 0xFF) {
 	case 0x00:
-		if ((data ^ ioamhram_[0x100]) & 0x30) {
+      /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907
+       * SGB packet bits are the sequence of P14/P15 writes. Report every FF00
+       * write; coalescing equal selector values loses protocol semantics. */
+      if (sgbJoypCallback_) {
+         unsigned const oldLow = ioamhram_[0x100] & 0x0F;
+         unsigned const state = sgbJoypCallback_(
+               sgbJoypUser_, data & 0x30, true) & 0x0F;
+         ioamhram_[0x100] =
+               (ioamhram_[0x100] & ~0x3Fu) | (data & 0x30) | state;
+         if (state != 0x0F && oldLow == 0x0F)
+            intreq_.flagIrq(0x10);
+      } else if ((data ^ ioamhram_[0x100]) & 0x30) {
 			ioamhram_[0x100] = (ioamhram_[0x100] & ~0x30u) | (data & 0x30);
 			updateInput();
 		}

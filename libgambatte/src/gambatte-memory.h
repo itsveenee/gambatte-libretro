@@ -116,10 +116,20 @@ public:
 	}
 
 	void write(unsigned p, unsigned data, unsigned long cc) {
-		if (cart_.wmem(p >> 12)) {
-			cart_.wmem(p >> 12)[p] = data;
-		} else
+      unsigned char *const wm = cart_.wmem(p >> 12);
+
+      /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907
+       * Mark battery/RTC writes where they happen instead of CRC-scanning
+       * the complete save area on every frontend dirty query. */
+      if (wm) {
+         if (p >= 0xA000 && p < 0xC000 && wm[p] != (unsigned char)data)
+            saveDataDirty_ = true;
+         wm[p] = data;
+      } else {
+         if (p >= 0xA000 && p < 0xC000)
+            saveDataDirty_ = true;
 			nontrivial_write(p, data, cc);
+      }
 	}
 
 	void ff_write(unsigned p, unsigned data, unsigned long cc) {
@@ -136,6 +146,14 @@ public:
 	unsigned long resetCounters(unsigned long cycleCounter);
 	void setSaveDir(std::string const &dir) { cart_.setSaveDir(dir); }
 	void setInputGetter(InputGetter *getInput) { getInput_ = getInput; }
+   void setSgbJoypCallback(
+         unsigned char (*callback)(void *, unsigned char, bool),
+         void *userdata) {
+      sgbJoypCallback_ = callback;
+      sgbJoypUser_ = userdata;
+   }
+   bool savedataDirty() const { return saveDataDirty_; }
+   void clearSavedataDirty() { saveDataDirty_ = false; }
 #ifdef HAVE_NETWORK
 	void setSerialIO(SerialIO* serial_io) { serial_io_ = serial_io; }
 #endif
@@ -192,6 +210,9 @@ private:
 	SerialIO *serial_io_;
 #endif
 	InputGetter *getInput_;
+   unsigned char (*sgbJoypCallback_)(void *, unsigned char, bool);
+   void *sgbJoypUser_;
+   bool saveDataDirty_;
 	unsigned long divLastUpdate_;
 	unsigned long lastOamDmaUpdate_;
 	InterruptRequester intreq_;

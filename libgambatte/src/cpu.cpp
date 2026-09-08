@@ -34,6 +34,7 @@ CPU::CPU()
  * members in cpu.h could silently introduce UB. Keep mem_
  * declared first, before sp/pc_, for this to remain safe. */
 , cycleCounter_(0)
+, lastRunCycles_(0) /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907 */
 , pc_(0x100)
 , sp(0xFFFE)
 , hf1(0xF)
@@ -52,7 +53,12 @@ CPU::CPU()
 }
 
 long CPU::runFor(unsigned long const cycles) {
+   /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907
+    * process() may stop at frame completion and instructions may overshoot
+    * the requested endpoint. Capture the real delta before counter rebasing. */
+   unsigned long const before = cycleCounter_;
 	process(cycles);
+   lastRunCycles_ = cycleCounter_ - before;
 
 	long const csb = mem_.cyclesSinceBlit(cycleCounter_);
 
