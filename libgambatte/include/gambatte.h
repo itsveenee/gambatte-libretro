@@ -28,7 +28,13 @@
 #include <cstddef>
 
 namespace gambatte {
-#if defined(VIDEO_RGB565) || defined(VIDEO_ABGR1555)
+/* AURORA_SGB_GAMBATTE_SHADE8_JOYP_SYNC_PERF_V3_20260908
+ * The embedded PS2 SGB build never needs an RGB framebuffer: ICD2 consumes
+ * the final four DMG shades. Keep the generic libretro ABI unchanged unless
+ * VIDEO_SGB_SHADE8 is explicitly selected by Aurora's PS2 build. */
+#if defined(VIDEO_SGB_SHADE8)
+typedef unsigned char video_pixel_t;
+#elif defined(VIDEO_RGB565) || defined(VIDEO_ABGR1555)
 typedef uint16_t video_pixel_t;
 #else
 typedef uint_least32_t video_pixel_t;
@@ -101,6 +107,15 @@ public:
    typedef unsigned char (*SgbJoypCallback)(
          void *userdata, unsigned char p14p15, bool write);
    void setSgbJoypCallback(SgbJoypCallback callback, void *userdata);
+
+   /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907
+    * bsnes-plus exposed scanline notification as a normal Gambatte API
+    * instead of making the core depend on a frontend symbol. */
+   void setScanlineCallback(void (*callback)(unsigned));
+
+   /* bsnes-classic HLEs the 256-byte SGB bootstrap. Its only CPU-register
+    * delta after the normal DMG post-boot state is A=01 (SGB1) / FF (SGB2). */
+   void setSgbPostBootState(bool sgb2);
 
    /* AURORA_SGB_GAMBATTE_VIDEO_PERF_FIX_V1_1_3_20260907 */
    void setSgbVideoBuffer(gambatte::video_pixel_t *videoBuf, int pitch);

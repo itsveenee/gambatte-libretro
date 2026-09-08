@@ -119,6 +119,17 @@ void GB::setSgbJoypCallback(SgbJoypCallback callback, void *userdata) {
    p_->cpu.setSgbJoypCallback(callback, userdata);
 }
 
+void GB::setScanlineCallback(void (*callback)(unsigned)) {
+   p_->cpu.setScanlineCallback(callback);
+}
+
+void GB::setSgbPostBootState(bool sgb2) {
+   /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907
+    * bsnes-classic applies this immediately after load/reset when its
+    * internal SGB bootstrap is HLE'd instead of executed. */
+   p_->cpu.setAccumulator(sgb2 ? 0xff : 0x01);
+}
+
 void GB::setSgbVideoBuffer(gambatte::video_pixel_t *videoBuf, int pitch) {
    p_->cpu.setVideoBuffer(videoBuf, pitch);
 }

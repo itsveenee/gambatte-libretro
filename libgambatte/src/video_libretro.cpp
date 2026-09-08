@@ -83,6 +83,7 @@ namespace gambatte
       statReg_(0),
       m2IrqStatReg_(0),
       m1IrqStatReg_(0),
+      scanlineCallback_(0), /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
       /* Color-correction defaults must be initialized BEFORE the
        * constructor body runs, because setColorCorrection(true)
        * below calls refreshPalettes() -> gbcToRgb32(), which
@@ -106,7 +107,10 @@ namespace gambatte
 
       for (std::size_t i = 0; i < sizeof(dmgColorsRgb32_) / sizeof(dmgColorsRgb32_[0]); ++i)
       {
-#ifdef VIDEO_RGB565
+#ifdef VIDEO_SGB_SHADE8
+         /* AURORA_SGB_GAMBATTE_SHADE8_JOYP_SYNC_PERF_V3_20260908: final mapped DMG shade is the framebuffer value. */
+         setDmgPaletteColor(i, (video_pixel_t)(i & 3));
+#elif defined(VIDEO_RGB565)
          uint16_t dmgColors[4]={0xFFFF, //11111 111111 11111
             0xAD55, //10101 101010 10101
             0x52AA, //01010 010101 01010

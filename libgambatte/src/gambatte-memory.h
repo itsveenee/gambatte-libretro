@@ -165,6 +165,10 @@ public:
 		lcd_.setVideoBuffer(videoBuf, pitch);
 	}
 
+   void setScanlineCallback(void (*callback)(unsigned)) {
+      lcd_.setScanlineCallback(callback);
+   } /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
+
 	void setDmgPaletteColor(int palNum, int colorNum, unsigned long rgb32) {
 		lcd_.setDmgPaletteColor(palNum, colorNum, rgb32);
 	}

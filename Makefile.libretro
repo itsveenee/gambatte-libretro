@@ -250,7 +250,7 @@ else ifeq ($(platform), ps2)
    CC = mips64r5900el-ps2-elf-gcc$(EXE_EXT)
    CXX = mips64r5900el-ps2-elf-g++$(EXE_EXT)
    AR = mips64r5900el-ps2-elf-ar$(EXE_EXT)
-   PLATFORM_DEFINES := -DPS2 -DVIDEO_ABGR1555
+   PLATFORM_DEFINES := -DPS2 -DVIDEO_SGB_SHADE8 # AURORA_SGB_GAMBATTE_SHADE8_JOYP_SYNC_PERF_V3_20260908
    CFLAGS += -G0
    CXXFLAGS += -G0
    STATIC_LINKING = 1
@@ -654,6 +654,16 @@ ifneq (,$(findstring msvc,$(platform)))
 endif
    CFLAGS   += -O2 -DNDEBUG
    CXXFLAGS += -O2 -DNDEBUG
+endif
+
+# AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907
+# R5900: override generic -O2 only for the embedded PS2 Gambatte build.
+# Keep this conservative: no fast-math and no LTO/plugin-archive dependency.
+ifeq ($(platform), ps2)
+ifneq ($(DEBUG), 1)
+   CFLAGS   += -O3 -fomit-frame-pointer -fno-math-errno
+   CXXFLAGS += -O3 -fomit-frame-pointer -fno-math-errno
+endif
 endif
 
 ifeq (,$(findstring msvc,$(platform)))

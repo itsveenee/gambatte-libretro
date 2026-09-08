@@ -34,6 +34,7 @@ public:
 	CPU();
 	long runFor(unsigned long cycles);
    unsigned long lastRunCycles() const { return lastRunCycles_; }
+   void setAccumulator(unsigned char value) { a_ = value; } /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
 	void setStatePtrs(SaveState &state);
 	void saveState(SaveState &state);
 	void loadState(SaveState const &state);
@@ -62,6 +63,10 @@ public:
 	void setVideoBuffer(video_pixel_t *videoBuf, std::ptrdiff_t pitch) {
 		mem_.setVideoBuffer(videoBuf, pitch);
 	}
+
+   void setScanlineCallback(void (*callback)(unsigned)) {
+      mem_.setScanlineCallback(callback);
+   } /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
 
 	void setInputGetter(InputGetter *getInput) {
 		mem_.setInputGetter(getInput);

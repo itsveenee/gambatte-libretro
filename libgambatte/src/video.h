@@ -50,6 +50,9 @@ class LCD
       void loadState(const SaveState &state, const unsigned char *oamram);
       void setDmgPaletteColor(unsigned palNum, unsigned colorNum, video_pixel_t rgb32);
       void setVideoBuffer(video_pixel_t *videoBuf, int pitch);
+      void setScanlineCallback(void (*callback)(unsigned)) {
+         scanlineCallback_ = callback;
+      } /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
       void setDmgMode(bool mode) { ppu_.setDmgMode(mode); }
    
       void swapToDMG() {
@@ -211,6 +214,7 @@ class LCD
       unsigned char statReg_;
       unsigned char m2IrqStatReg_;
       unsigned char m1IrqStatReg_;
+      void (*scanlineCallback_)(unsigned); /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
 
       static void setDmgPalette(video_pixel_t *palette, const video_pixel_t *dmgColors, unsigned data);
       void setDmgPaletteColor(unsigned index, video_pixel_t rgb32);

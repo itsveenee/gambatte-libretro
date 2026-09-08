@@ -22,10 +22,9 @@
 #include <algorithm>
 #include <string>
 
-/* AURORA_SGB_GAMBATTE_BSNESPLUS_VIDEO_V1_2_4_20260907
- * Mirrors the bsnes-plus Gambatte scanline callback phase: report the
- * NEW LY after doLyCountEvent(), not an in-progress/completed row pointer. */
-extern "C" void AuroraGambatteSgbNewLy(unsigned line);
+/* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907
+ * SGB scanline notification is registered through LCD::setScanlineCallback(),
+ * matching the bsnes-plus Gambatte contract and keeping this core standalone. */
 
 namespace gambatte
 {
@@ -762,10 +761,10 @@ inline void LCD::event()
          ppu_.doLyCountEvent();
          eventTimes_.set<LY_COUNT>(ppu_.lyCounter().time());
 
-         /* AURORA_SGB_GAMBATTE_BSNESPLUS_VIDEO_V1_2_4_20260907
-          * The callback receives the newly-entered LY. When this crosses
-          * an 8-line boundary, Aurora packs the previous complete block. */
-         AuroraGambatteSgbNewLy(ppu_.lyCounter().ly());
+         /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907
+          * Same phase used by bsnes-plus: callback after LY advances. */
+         if (scanlineCallback_)
+            scanlineCallback_(ppu_.lyCounter().ly());
          break;
    }
 }

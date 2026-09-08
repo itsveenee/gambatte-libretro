@@ -682,21 +682,25 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 
 	switch (p & 0xFF) {
 	case 0x00:
-      /* AURORA_SGB_JOYP_BRIDGE_V1_1_20260907
-       * SGB packet bits are the sequence of P14/P15 writes. Report every FF00
-       * write; coalescing equal selector values loses protocol semantics. */
-      if (sgbJoypCallback_) {
-         unsigned const oldLow = ioamhram_[0x100] & 0x0F;
-         unsigned const state = sgbJoypCallback_(
-               sgbJoypUser_, data & 0x30, true) & 0x0F;
-         ioamhram_[0x100] =
-               (ioamhram_[0x100] & ~0x3Fu) | (data & 0x30) | state;
-         if (state != 0x0F && oldLow == 0x0F)
-            intreq_.flagIrq(0x10);
-      } else if ((data ^ ioamhram_[0x100]) & 0x30) {
-			ioamhram_[0x100] = (ioamhram_[0x100] & ~0x30u) | (data & 0x30);
-			updateInput();
-		}
+      /* AURORA_SGB_GAMBATTE_SHADE8_JOYP_SYNC_PERF_V3_20260908
+       * Match bsnes-plus: the SGB side observes P14/P15 TRANSITIONS, not
+       * arbitrary repeated FF00 stores with the same selector level. Feeding
+       * duplicates into the packet parser creates phantom strobes/bits. */
+      if ((data ^ ioamhram_[0x100]) & 0x30) {
+         if (sgbJoypCallback_) {
+            unsigned const oldLow = ioamhram_[0x100] & 0x0F;
+            unsigned const state = sgbJoypCallback_(
+                  sgbJoypUser_, data & 0x30, true) & 0x0F;
+            ioamhram_[0x100] =
+                  (ioamhram_[0x100] & ~0x3Fu) | (data & 0x30) | state;
+            if (state != 0x0F && oldLow == 0x0F)
+               intreq_.flagIrq(0x10);
+         } else {
+            ioamhram_[0x100] =
+                  (ioamhram_[0x100] & ~0x30u) | (data & 0x30);
+            updateInput();
+         }
+      }
 
 		return;
 	case 0x01:
