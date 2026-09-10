@@ -19,6 +19,7 @@
 #ifndef SAVESTATE_H
 #define SAVESTATE_H
 
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:SAVESTATE_H */
 #include <stddef.h>
 #include <cstddef>
 
@@ -124,6 +125,8 @@ struct SaveState {
 		unsigned char state;
 		unsigned char nextSprite;
 		unsigned char currentSprite;
+		unsigned char notCgbDmg; /* 1=native/not compatibility; 0=CGB-DMG */
+		unsigned char spPriority; /* bit1 is a serialized-format marker */
 		unsigned char lyc;
 		unsigned char m0lyc;
 		unsigned char oldWy;

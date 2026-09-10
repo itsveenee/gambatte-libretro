@@ -16,6 +16,7 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:STATESAVER_CPP */
 #include "statesaver.h"
 #include "savestate.h"
 #include "gambatte-array.h"
@@ -410,6 +411,8 @@ SaverList::SaverList() {
 	{ static const char label[] = { p,p,u,s,t,a,t, NUL }; ADD(ppu.state); }
 	{ static const char label[] = { n,s,p,r,i,t,e, NUL }; ADD(ppu.nextSprite); }
 	{ static const char label[] = { c,s,p,r,i,t,e, NUL }; ADD(ppu.currentSprite); }
+	{ static const char label[] = { i,s,c,g,b,     NUL }; ADD(ppu.notCgbDmg); }
+	{ static const char label[] = { s,p,p,r,i,o,r, NUL }; ADD(ppu.spPriority); }
 	{ static const char label[] = { l,y,c,         NUL }; ADD(ppu.lyc); }
 	{ static const char label[] = { m,NO0,l,y,c,   NUL }; ADD(ppu.m0lyc); }
 	{ static const char label[] = { o,l,d,w,y,     NUL }; ADD(ppu.oldWy); }

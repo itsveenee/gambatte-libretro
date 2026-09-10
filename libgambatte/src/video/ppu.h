@@ -19,6 +19,7 @@
 #ifndef PPU_H
 #define PPU_H
 
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:PPU_H */
 #include "lcddef.h"
 #include "ly_counter.h"
 #include "sprite_mapper.h"
@@ -89,6 +90,8 @@ struct PPUPriv {
 	unsigned short spwordList[11];
 	unsigned char nextSprite;
 	unsigned char currentSprite;
+	/* bit0: 0=CGB OAM priority, 1=DMG X priority; bit1=new-state marker */
+	unsigned char spPriority;
 
 	unsigned char const *vram;
 	PPUState const *nextCallPtr;
@@ -159,6 +162,9 @@ public:
 	bool cgb() const { return p_.cgb; }
    void setDmgMode(bool mode) { p_.dmgMode = mode; }
    bool inDmgMode() const { return p_.dmgMode; }
+   void setSpPriority(bool xSpPriority) {
+      p_.spPriority = 2 | (xSpPriority ? 1 : 0);
+   }
 	void doLyCountEvent() { p_.lyCounter.doEvent(); }
 	unsigned long doSpriteMapEvent(unsigned long time) { return p_.spriteMapper.doEvent(time); }
 	PPUFrameBuf const & frameBuf() const { return p_.framebuf; }

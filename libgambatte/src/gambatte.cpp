@@ -16,6 +16,7 @@
  *   Free Software Foundation, Inc.,                                       *
  *   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.             *
  ***************************************************************************/
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:GAMBATTE_CPP */
 #include "gambatte.h"
 #include "cpu.h"
 #include "savestate.h"
@@ -107,6 +108,16 @@ void GB::Priv::full_init(bool const clearSram) {
       ioamhram[0x102] = serialctrl;//serialctrl
       ioamhram[0x148] = 0xFC;//object palette 0
       ioamhram[0x149] = 0xFC;//object palette 1
+      /* Before FF50 the physical CGB is still in native boot semantics. */
+      state.ppu.notCgbDmg = 1;
+      state.ppu.spPriority = 2;
+   } else {
+      /* Preserve the legacy HLE/no-BIOS interpretation of KEY0 while
+       * giving the new savestate field an explicit value. */
+      const bool hleCgbDmg = cpu.isCgb()
+                           && state.mem.ioamhram.get()[0x14C] == 0x04;
+      state.ppu.notCgbDmg = hleCgbDmg ? 0 : 1;
+      state.ppu.spPriority = 2 | ((!cpu.isCgb() || hleCgbDmg) ? 1 : 0);
    }
 
    cpu.loadState(state);
@@ -212,6 +223,8 @@ void GB::setDmgPaletteColor(unsigned palNum, unsigned colorNum, unsigned rgb32) 
 
 bool GB::loadState(const void *data, size_t size) {
    SaveState state;
+   state.ppu.notCgbDmg = 0xFF; /* pre-V3 state: infer from KEY0/FF50 */
+   state.ppu.spPriority = 0;   /* pre-V3 state: deterministic fallback */
    p_->cpu.setStatePtrs(state);
 
    if (StateSaver::loadState(state, data, size)) {

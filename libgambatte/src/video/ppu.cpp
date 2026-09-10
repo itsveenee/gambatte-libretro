@@ -16,6 +16,7 @@
 //   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:PPU_CPP */
 #include "ppu.h"
 #include "savestate.h"
 #include <algorithm>
@@ -107,6 +108,60 @@ static inline int lcdcObj2x(PPUPriv const &p) { return p.lcdc & lcdc_obj2x; }
 static inline int lcdcObjEn(PPUPriv const &p) { return p.lcdc & lcdc_objen; }
 static inline int lcdcBgEn( PPUPriv const &p) { return p.lcdc & lcdc_bgen;  }
 
+/* Attribute bit 3 selects VRAM bank 1 only in native CGB mode.
+ * In CGB-DMG compatibility mode it is not a tile/OBJ bank select. */
+static inline unsigned auroraCgbTileBankOffset(PPUPriv const &p, unsigned attrib) {
+   return (p.cgb && !p.dmgMode && (attrib & 0x08U)) ? 0x2000U : 0U;
+}
+
+/* OPRI=1 is a complete DMG sprite-priority mode, not merely a
+ * different OBJ-vs-OBJ winner test.  In particular, the CGB BG tile
+ * attribute priority bit must not leak into DMG OBJ-vs-BG priority.
+ * This is the old-core equivalent of modern Gambatte's
+ * handleSpritePriorityDmg(). */
+static inline void auroraHandleSpritePriorityDmg(PPUPriv &p, int i,
+      video_pixel_t *dst, int xpos, unsigned tileword) {
+   int n;
+   int pos = int(p.spriteList[i].spx) - xpos;
+   if (pos < 0) {
+      n = pos + 8;
+      pos = 0;
+   } else
+      n = 8 - pos;
+
+   unsigned const attrib = p.spriteList[i].attrib;
+   unsigned spword = p.spwordList[i];
+   video_pixel_t const *const spPalette = p.spPalette + (attrib >> 2 & 4);
+   video_pixel_t *d = dst + pos;
+
+   if (!(attrib & attr_bgpriority)) {
+      switch (n) {
+      case 8: if (spword >> 14    ) { d[7] = spPalette[spword >> 14    ]; }
+      case 7: if (spword >> 12 & 3) { d[6] = spPalette[spword >> 12 & 3]; }
+      case 6: if (spword >> 10 & 3) { d[5] = spPalette[spword >> 10 & 3]; }
+      case 5: if (spword >>  8 & 3) { d[4] = spPalette[spword >>  8 & 3]; }
+      case 4: if (spword >>  6 & 3) { d[3] = spPalette[spword >>  6 & 3]; }
+      case 3: if (spword >>  4 & 3) { d[2] = spPalette[spword >>  4 & 3]; }
+      case 2: if (spword >>  2 & 3) { d[1] = spPalette[spword >>  2 & 3]; }
+      case 1: if (spword       & 3) { d[0] = spPalette[spword       & 3]; }
+      }
+      spword >>= n * 2;
+   } else {
+      unsigned tw = tileword >> pos * 2;
+      d += n;
+      n = -n;
+      do {
+         if (spword & 3)
+            d[n] = (tw & 3) ? p.bgPalette[tw & 3]
+                              : spPalette[spword & 3];
+         spword >>= 2;
+         tw >>= 2;
+      } while (++n);
+   }
+
+   p.spwordList[i] = spword;
+}
+
 static inline int weMasterCheckPriorToLyIncLineCycle(bool cgb) { return 450 - cgb; }
 static inline int weMasterCheckAfterLyIncLineCycle(bool cgb) { return 454 - cgb; }
 static inline int m3StartLineCycle(bool /*cgb*/) { return 83; }
@@ -149,7 +204,7 @@ static int loadTileDataByte0(PPUPriv const &p) {
 	                       ? p.winYPos
 	                       : p.scy + p.lyCounter.ly();
 
-	return p.vram[0x1000 + (p.nattrib << 10             & 0x2000)
+	return p.vram[0x1000 + auroraCgbTileBankOffset(p, p.nattrib)
 	                     - ((p.reg1 * 32 | p.lcdc << 8) & 0x1000)
 	                     + p.reg1 * 16
 	                     + ((-(p.nattrib >> 6 & 1) ^ yoffset) & 7) * 2];
@@ -160,7 +215,7 @@ static int loadTileDataByte1(PPUPriv const &p) {
 	                       ? p.winYPos
 	                       : p.scy + p.lyCounter.ly();
 
-	return p.vram[0x1000 + (p.nattrib << 10             & 0x2000)
+	return p.vram[0x1000 + auroraCgbTileBankOffset(p, p.nattrib)
 	                     - ((p.reg1 * 32 | p.lcdc << 8) & 0x1000)
 	                     + p.reg1 * 16
 	                     + ((-(p.nattrib >> 6 & 1) ^ yoffset) & 7) * 2 + 1];
@@ -488,9 +543,9 @@ static void doFullTilesUnrolledCgb(PPUPriv &p, int const xend, video_pixel_t *co
 				                         ? p.spriteList[nextSprite].line ^ 15
 				                         : p.spriteList[nextSprite].line     ) * 2;
 
-				reg0 = vram[(attrib << 10 & 0x2000)
+				reg0 = vram[auroraCgbTileBankOffset(p, attrib)
 				          + (lcdcObj2x(p) ? (reg1 & ~16) | spline : reg1 | (spline & ~16))    ];
-				reg1 = vram[(attrib << 10 & 0x2000)
+				reg1 = vram[auroraCgbTileBankOffset(p, attrib)
 				          + (lcdcObj2x(p) ? (reg1 & ~16) | spline : reg1 | (spline & ~16)) + 1];
 
 				p.spwordList[nextSprite] = expand_lut[reg0 + (attrib << 3 & 0x100)]
@@ -524,10 +579,13 @@ static void doFullTilesUnrolledCgb(PPUPriv &p, int const xend, video_pixel_t *co
 				 * inside L1 even though the full table is 32 KiB
 				 * (u32 build). */
 				{
-					unsigned const lo = ntileword & 0xFF;
-					unsigned const hi = ntileword >> 8;
-					std::memcpy(&dst[0], p.bgPaletteExpanded[nattrib & 7][lo], 4 * sizeof(video_pixel_t));
-					std::memcpy(&dst[4], p.bgPaletteExpanded[nattrib & 7][hi], 4 * sizeof(video_pixel_t));
+					const bool compatBgOff = p.dmgMode && !lcdcBgEn(p);
+					unsigned const renderWord = compatBgOff ? 0U : ntileword;
+					unsigned const renderAttrib = compatBgOff ? 0U : nattrib;
+					unsigned const lo = renderWord & 0xFF;
+					unsigned const hi = renderWord >> 8;
+					std::memcpy(&dst[0], p.bgPaletteExpanded[renderAttrib & 7][lo], 4 * sizeof(video_pixel_t));
+					std::memcpy(&dst[4], p.bgPaletteExpanded[renderAttrib & 7][hi], 4 * sizeof(video_pixel_t));
 				}
 				dst += 8;
 
@@ -538,7 +596,7 @@ static void doFullTilesUnrolledCgb(PPUPriv &p, int const xend, video_pixel_t *co
 				unsigned const tdo = (tdoffset & ~(tno << 5));
 				unsigned char const *const td = vram + tno * 16
 				                                     + ((nattrib & attr_yflip) ? tdo ^ 14 : tdo)
-				                                     + (nattrib << 10 & 0x2000);
+				                                     + auroraCgbTileBankOffset(p, nattrib);
 				unsigned short const *const explut = expand_lut + (nattrib << 3 & 0x100);
 				ntileword = explut[td[0]] + explut[td[1]] * 2;
 			} while (dst != dstend);
@@ -557,7 +615,9 @@ static void doFullTilesUnrolledCgb(PPUPriv &p, int const xend, video_pixel_t *co
 
 		{
 			video_pixel_t *const dst = dbufline + (xpos - 8);
-			unsigned const tileword = p.ntileword;
+			unsigned const tileword = p.dmgMode
+			                          ? (-(p.lcdc & 1U) & p.ntileword)
+			                          : p.ntileword;
 			unsigned const attrib   = p.nattrib;
 			video_pixel_t const *const bgPalette = p.bgPalette + (attrib & 7) * 4;
 
@@ -576,6 +636,11 @@ static void doFullTilesUnrolledCgb(PPUPriv &p, int const xend, video_pixel_t *co
 				do {
 					int pos = int(p.spriteList[i].spx) - xpos;
 					p.spwordList[i] >>= pos * 2 >= 0 ? 16 - pos * 2 : 16 + pos * 2;
+					--i;
+				} while (i >= 0 && int(p.spriteList[i].spx) > xpos - 8);
+			} else if (p.spPriority & 1U) {
+				do {
+					auroraHandleSpritePriorityDmg(p, i, dst, xpos, tileword);
 					--i;
 				} while (i >= 0 && int(p.spriteList[i].spx) > xpos - 8);
 			} else {
@@ -682,7 +747,7 @@ static void doFullTilesUnrolledCgb(PPUPriv &p, int const xend, video_pixel_t *co
 			unsigned const tdo = tdoffset & ~(tno << 5);
 			unsigned char const *const td = vram + tno * 16
 			                                     + ((nattrib & attr_yflip) ? tdo ^ 14 : tdo)
-			                                     + (nattrib << 10 & 0x2000);
+			                                     + auroraCgbTileBankOffset(p, nattrib);
 			unsigned short const *const explut = expand_lut + (nattrib << 3 & 0x100);
 			p.ntileword = explut[td[0]] + explut[td[1]] * 2;
 			p.nattrib   = nattrib;
@@ -764,7 +829,8 @@ static void plotPixel(PPUPriv &p) {
 			p.winDrawState |= win_draw_start;
 	}
 
-	unsigned const twdata = tileword & ((p.lcdc & 1) | p.cgb) * 3;
+	unsigned const twdata = tileword
+	                      & ((p.lcdc & 1) | (p.cgb && !p.dmgMode)) * 3;
 	video_pixel_t pixel = p.bgPalette[twdata + (p.attrib & 7) * 4];
 	int i = static_cast<int>(p.nextSprite) - 1;
 
@@ -772,7 +838,7 @@ static void plotPixel(PPUPriv &p) {
 		unsigned spdata = 0;
 		unsigned attrib = 0;
 
-		if (p.cgb) {
+		if (!(p.spPriority & 1U)) {
 			unsigned minId = 0xFF;
 
 			do {
@@ -971,7 +1037,7 @@ namespace LoadSprites {
 			(  (p.spriteList[p.currentSprite].attrib & attr_yflip)
 			 ? p.spriteList[p.currentSprite].line ^ 15
 			 : p.spriteList[p.currentSprite].line         ) * 2;
-		p.reg0 = p.vram[(p.spriteList[p.currentSprite].attrib << 10 & p.cgb * 0x2000)
+		p.reg0 = p.vram[auroraCgbTileBankOffset(p, p.spriteList[p.currentSprite].attrib)
 		              + (lcdcObj2x(p) ? (p.reg1 * 16 & ~16) | spline : p.reg1 * 16 | (spline & ~16))];
 		inc(f3_, p);
 	}
@@ -991,7 +1057,7 @@ namespace LoadSprites {
 			(  (p.spriteList[p.currentSprite].attrib & attr_yflip)
 			 ? p.spriteList[p.currentSprite].line ^ 15
 			 : p.spriteList[p.currentSprite].line         ) * 2;
-		p.reg1 = p.vram[(p.spriteList[p.currentSprite].attrib << 10 & p.cgb * 0x2000)
+		p.reg1 = p.vram[auroraCgbTileBankOffset(p, p.spriteList[p.currentSprite].attrib)
 		              + (lcdcObj2x(p) ? (p.reg1 * 16 & ~16) | spline : p.reg1 * 16 | (spline & ~16)) + 1];
 		inc(f5_, p);
 	}
@@ -1457,6 +1523,7 @@ namespace gambatte {
 PPUPriv::PPUPriv(NextM0Time &nextM0Time, unsigned char const *const oamram, unsigned char const *const vram)
 : nextSprite(0)
 , currentSprite(0xFF)
+, spPriority(3)
 , vram(vram)
 , nextCallPtr(&M2_Ly0::f0_)
 , now(0)
@@ -1522,6 +1589,8 @@ void PPU::saveState(SaveState &ss) const {
 	ss.ppu.weMaster = p_.weMaster;
 	saveSpriteList(p_, ss);
 	ss.ppu.state = p_.nextCallPtr->id;
+	ss.ppu.notCgbDmg = p_.dmgMode ? 0 : 1;
+	ss.ppu.spPriority = p_.spPriority;
 	ss.ppu.lastM0Time = p_.now - p_.lastM0Time;
 }
 
@@ -1624,7 +1693,14 @@ void PPU::loadState(SaveState const &ss, unsigned char const *const oamram) {
 	PPUState const *
       const m3loopState   = decodeM3LoopState(ss.ppu.state);
 	long const videoCycles = std::min(ss.ppu.videoCycles, 70223UL);
-	bool const ds          = p_.cgb & ss.mem.ioamhram.get()[0x14D] >> 7;
+	const bool bootMapped = ss.mem.ioamhram.get()[0x150] != 0xFF;
+	const bool inferredDmgMode = p_.cgb && !bootMapped
+	                          && ss.mem.ioamhram.get()[0x14C] == 0x04;
+	const bool savedDmgMode = ss.ppu.notCgbDmg <= 1
+	                       ? !static_cast<bool>(ss.ppu.notCgbDmg)
+	                       : inferredDmgMode;
+	bool const ds = !savedDmgMode && p_.cgb
+	             && ((ss.mem.ioamhram.get()[0x14D] >> 7) & 1);
 	long const vcycs       = videoCycles - ds * m2_ds_offset < 0
 	                 ? videoCycles - ds * m2_ds_offset + 70224
 	                 : videoCycles - ds * m2_ds_offset;
@@ -1641,7 +1717,11 @@ void PPU::loadState(SaveState const &ss, unsigned char const *const oamram) {
 	p_.wy = ss.mem.ioamhram.get()[0x14A];
 	p_.wy2 = ss.ppu.oldWy;
 	p_.wx = ss.mem.ioamhram.get()[0x14B];
-   p_.dmgMode = (ss.mem.ioamhram.get()[0x14C] == 0x04);
+   p_.dmgMode = savedDmgMode;
+   p_.spPriority = (ss.ppu.spPriority & 2)
+      ? ss.ppu.spPriority
+      : (2 | ((!p_.cgb || savedDmgMode
+               || (bootMapped && (ss.mem.ioamhram.get()[0x16C] & 1))) ? 1 : 0));
 	p_.xpos = std::min<int>(ss.ppu.xpos, 168);
 	p_.endx = (p_.xpos & ~7) + (ss.ppu.endx & 7);
 	p_.endx = std::min(p_.endx <= p_.xpos ? p_.endx + 8 : p_.endx, 168);
@@ -1689,6 +1769,8 @@ void PPU::loadState(SaveState const &ss, unsigned char const *const oamram) {
 void PPU::reset(unsigned char const *oamram, unsigned char const *vram, bool cgb) {
 	p_.vram = vram;
 	p_.cgb = cgb;
+	p_.dmgMode = false;
+	p_.spPriority = cgb ? 2 : 3;
 	p_.spriteMapper.reset(oamram, cgb);
 }
 

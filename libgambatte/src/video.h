@@ -19,6 +19,7 @@
 #ifndef VIDEO_H
 #define VIDEO_H
 
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:VIDEO_H */
 #include "interruptrequester.h"
 #include "video/lyc_irq.h"
 #include "video/m0_irq.h"
@@ -54,8 +55,26 @@ class LCD
          scanlineCallback_ = callback;
       } /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
       void setDmgMode(bool mode) { ppu_.setDmgMode(mode); }
-   
-      void swapToDMG() {
+      bool inDmgMode() const { return ppu_.inDmgMode(); }
+      void setSpPriority(bool xSpPriority, unsigned long cc) {
+         update(cc);
+         ppu_.setSpPriority(xSpPriority);
+      }
+
+      /* Complete the CGB -> DMG-compatibility transition only when the
+       * boot ROM is about to unmap at FF50. Snapshot the CGB palette
+       * RAM at that exact boundary, then reinterpret FF47/48/49 as the
+       * DMG shade-mapping registers over those compatibility colours. */
+      void enterDmgCompatibility(unsigned bgp, unsigned obp0,
+                                 unsigned obp1, unsigned long cc) {
+         update(cc);
+         for (unsigned i = 0; i < 8; ++i)
+            dmgColorsGBC_[i] = bgpData_[i];
+         for (unsigned i = 0; i < 16; ++i)
+            dmgColorsGBC_[8 + i] = objpData_[i];
+         bgpData_[0] = static_cast<unsigned char>(bgp);
+         objpData_[0] = static_cast<unsigned char>(obp0);
+         objpData_[1] = static_cast<unsigned char>(obp1);
          ppu_.setDmgMode(true);
          refreshPalettes();
       }

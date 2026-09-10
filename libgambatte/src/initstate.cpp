@@ -16,6 +16,7 @@
 //   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:INITSTATE_CPP */
 #include "initstate.h"
 #include "counterdef.h"
 #include "savestate.h"
@@ -1271,6 +1272,10 @@ void gambatte::setInitState(SaveState &state, bool const cgb, bool const gbaCgbM
 	state.ppu.state = 0;
 	state.ppu.nextSprite = 0;
 	state.ppu.currentSprite = 0;
+	/* full_init() refines this after it knows whether a real boot ROM
+	 * is mapped. These values keep direct setInitState users deterministic. */
+	state.ppu.notCgbDmg = 1;
+	state.ppu.spPriority = cgb ? 2 : 3;
 	state.ppu.lyc   = state.mem.ioamhram.get()[0x145];
 	state.ppu.m0lyc = state.mem.ioamhram.get()[0x145];
 	state.ppu.weMaster = false;

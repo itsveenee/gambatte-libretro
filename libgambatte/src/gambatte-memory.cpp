@@ -16,6 +16,7 @@
 //   59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 
+/* AURORA_GAMBATTE_CGB_DMG_TOTAL_V5_20260910:MEMORY_CPP */
 #include "gambatte-memory.h"
 #include "inputgetter.h"
 #include "savestate.h"
@@ -110,21 +111,23 @@ void Memory::loadState(SaveState const &state) {
 	oamDmaPos_ = state.mem.oamDmaPos;
 #ifdef HAVE_NETWORK
 	serialize_value_ = state.mem.serialize_value;
-	serialize_is_fastcgb_ = state.mem.serialize_is_fastcgb;
+	serialize_is_fastcgb_ = state.mem.serialize_is_fastcgb
+	                         && isCgb() && !lcd_.inDmgMode();
 #endif
 	serialCnt_ = intreq_.eventTime(intevent_serial) != disabled_time
 	           ? serialCntFrom(intreq_.eventTime(intevent_serial) - state.cpu.cycleCounter,
 #ifdef HAVE_NETWORK
 	                           serialize_is_fastcgb_
 #else
-                              ioamhram_[0x102] & isCgb() * 2
+                              ioamhram_[0x102] & (isCgb() && !lcd_.inDmgMode()) * 2
 #endif
                               )
 	           : 8;
 
-	cart_.setVrambank(ioamhram_[0x14F] & isCgb());
+	cart_.setVrambank(ioamhram_[0x14F] & (isCgb() && !lcd_.inDmgMode()));
 	cart_.setOamDmaSrc(oam_dma_src_off);
-	cart_.setWrambank(isCgb() && (ioamhram_[0x170] & 0x07) ? ioamhram_[0x170] & 0x07 : 1);
+	cart_.setWrambank((isCgb() && !lcd_.inDmgMode()) &&
+	                  (ioamhram_[0x170] & 0x07) ? ioamhram_[0x170] & 0x07 : 1);
 
 	if (lastOamDmaUpdate_ != disabled_time) {
 		oamDmaInitSetup();
@@ -139,7 +142,7 @@ void Memory::loadState(SaveState const &state) {
 	                                 : state.cpu.cycleCounter);
 	blanklcd_ = false;
 
-	if (!isCgb())
+	if (!isCgb() || lcd_.inDmgMode())
 		std::memset(cart_.vramdata() + 0x2000, 0, 0x2000);
 }
 
@@ -173,7 +176,8 @@ void Memory::checkSerial(unsigned long const cc) {
 		unsigned char data;
 		bool fastCgb;
 		if (serial_io_->check(ioamhram_[0x101], data, fastCgb)) {
-			startSerialTransfer(cc, data, fastCgb);
+			startSerialTransfer(cc, data,
+			                    fastCgb && isCgb() && !lcd_.inDmgMode());
 		}
 	}
 }
@@ -205,7 +209,7 @@ void Memory::updateSerial(unsigned long const cc) {
 			ioamhram_[0x101] = ((ioamhram_[0x101] << (serialCnt_ - targetCnt)) |
 					    (serialize_value_ >> (8 - (serialCnt_ - targetCnt)))) & 0xFF;
 #else
-                                             ioamhram_[0x102] & isCgb() * 2);
+                                             ioamhram_[0x102] & (isCgb() && !lcd_.inDmgMode()) * 2);
          ioamhram_[0x101] = (((ioamhram_[0x101] + 1) << (serialCnt_ - targetCnt)) - 1) & 0xFF;
 #endif
 			serialCnt_ = targetCnt;
@@ -385,7 +389,7 @@ unsigned long Memory::stop(unsigned long cc) {
    unsigned is_doublespeed = (unsigned)isDoubleSpeed();
 	cc += 4 + 4 * is_doublespeed;
 
-   if (ioamhram_[0x14D] & isCgb())
+   if (ioamhram_[0x14D] & (isCgb() && !lcd_.inDmgMode()))
    {
       psg_.generateSamples(cc, is_doublespeed);
       lcd_.speedChange(cc);
@@ -596,10 +600,24 @@ unsigned Memory::nontrivial_ff_read(unsigned const p, unsigned long const cc) {
 		return ioamhram_[0x141] | lcd_.getStat(ioamhram_[0x145], cc);
 	case 0x44:
 		return lcd_.getLyReg(cc);
+	case 0x4C:
+		if (!bootloader.active())
+			return 0xFF;
+		break;
+	case 0x50:
+		return bootloader.active() ? 0xFE : 0xFF;
+	case 0x56:
+		if (isCgb() && lcd_.inDmgMode())
+			return ioamhram_[0x156] | 0x02;
+		break;
 	case 0x69:
-		return lcd_.cgbBgColorRead(ioamhram_[0x168] & 0x3F, cc);
+		if (isCgb() && !lcd_.inDmgMode())
+			return lcd_.cgbBgColorRead(ioamhram_[0x168] & 0x3F, cc);
+		break;
 	case 0x6B:
-		return lcd_.cgbSpColorRead(ioamhram_[0x16A] & 0x3F, cc);
+		if (isCgb() && !lcd_.inDmgMode())
+			return lcd_.cgbSpColorRead(ioamhram_[0x16A] & 0x3F, cc);
+		break;
 	default:
 		break;
 	}
@@ -716,8 +734,8 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
       {
 			unsigned char receivedByte = 0xFF;
 			if (serial_io_ != 0)
-				receivedByte = serial_io_->send(ioamhram_[0x101], (data & isCgb() * 2));
-			startSerialTransfer(cc, receivedByte, (data & isCgb() * 2));
+				receivedByte = serial_io_->send(ioamhram_[0x101], (data & ((isCgb() && !lcd_.inDmgMode()) * 2)));
+			startSerialTransfer(cc, receivedByte, (data & ((isCgb() && !lcd_.inDmgMode()) * 2)));
       }
       /* AURORA_GB_FINAL_R1_TURBO_EXTERNAL_KICK_20260909
        * Turbo File GB supplies the serial clock externally. A game may HALT
@@ -753,13 +771,14 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
                intreq_.flagIrq(8);
             }
             else
-               startSerialTransfer(cc, receivedByte, externalFastCgb);
+               startSerialTransfer(cc, receivedByte,
+                                   externalFastCgb && isCgb() && !lcd_.inDmgMode());
          }
       }
 #else
 		if ((data & 0x81) == 0x81)
       {
-         intreq_.setEventTime<intevent_serial>((data & isCgb() * 2)
+         intreq_.setEventTime<intevent_serial>((data & ((isCgb() && !lcd_.inDmgMode()) * 2))
                ? (cc & ~0x07ul) + 0x010 * 8
                : (cc & ~0xFFul) + 0x200 * 8);
       }
@@ -767,7 +786,7 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
          intreq_.setEventTime<intevent_serial>(disabled_time);
 #endif
 
-		data |= 0x7E - isCgb() * 2;
+		data |= 0x7E - (isCgb() && !lcd_.inDmgMode()) * 2;
 		break;
 	case 0x04:
 		ioamhram_[0x104] = 0;
@@ -1041,19 +1060,19 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 		return;
 	case 0x47:
          
-		if (!isCgb() || (ioamhram_[0x14C] == 0x04))//allow in gbc gb mode
+		if (!isCgb() || lcd_.inDmgMode())//allow in gbc gb mode
 			lcd_.dmgBgPaletteChange(data, cc);
 
 		break;
 	case 0x48:
          
-		if (!isCgb() || (ioamhram_[0x14C] == 0x04))//allow in gbc gb mode
+		if (!isCgb() || lcd_.inDmgMode())//allow in gbc gb mode
 			lcd_.dmgSpPalette1Change(data, cc);
          
 		break;
 	case 0x49:
          
-		if (!isCgb() || (ioamhram_[0x14C] == 0x04))//allow in gbc gb mode
+		if (!isCgb() || lcd_.inDmgMode())//allow in gbc gb mode
 			lcd_.dmgSpPalette2Change(data, cc);
          
 		break;
@@ -1064,11 +1083,14 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 		lcd_.wxChange(data, cc);
 		break;
    case 0x4C://switch to classic gb mode from gbc mode or lock system to gbc mode
+      if (!bootloader.active())
+         return;
       if ((ioamhram_[0x14C] != 0x04)/*gb mode*/ && (ioamhram_[0x14C] != 0x80)/*gbc mode*/) {
          //mode has not been set yet, set the mode if data is valid
          if (data == 0x04) {
-            ioamhram_[0x14C] = 0x04;//0x04 is gbc gb mode, lock register and switch mode to gb emulation mode
-            lcd_.swapToDMG();
+            /* KEY0 selects DMG compatibility, but the CGB bootstrap still
+             * needs native-CGB palette/SVBK access until FF50 unmaps it. */
+            ioamhram_[0x14C] = 0x04;
          }
          else if (data == 0x80)
             ioamhram_[0x14C] = 0x80;//0x80 is gbc mode, no special operations needed, just lock this register
@@ -1077,18 +1099,43 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
       }
       return;
 	case 0x4D:
-		if (isCgb())
+		if (isCgb() && !lcd_.inDmgMode())
 			ioamhram_[0x14D] = (ioamhram_[0x14D] & ~1u) | (data & 1);
 
 		return;
 	case 0x4F:
-		if (isCgb()) {
+		if (isCgb() && !lcd_.inDmgMode()) {
 			cart_.setVrambank(data & 1);
 			ioamhram_[0x14F] = 0xFE | data;
 		}
 
 		return;
    case 0x50://for bootloader, swap bootloader with rom
+      /* FF50 is a one-way lock transition. Writes with bit 0 clear do
+       * nothing, and writes after the boot ROM has been unmapped do
+       * nothing. Gate the whole handoff (including the cartridge hook),
+       * not merely the CGB-DMG mode switch. */
+      if (!bootloader.active() || !(data & 1))
+         return;
+      /* KEY0/OPRI/palette/SVBK writes all occur while the boot ROM is
+       * mapped. FF50 makes the selected compatibility mode effective. */
+      if (isCgb() && ioamhram_[0x14C] == 0x04) {
+         lcd_.enterDmgCompatibility(ioamhram_[0x147],
+                                    ioamhram_[0x148],
+                                    ioamhram_[0x149], cc);
+         /* VBK/SVBK cease to select CGB banks for cartridge software. */
+         cart_.setVrambank(0);
+         cart_.setWrambank(1);
+         /* Match mature Gambatte's post-boot CGB-DMG locked/readback
+          * values. These bits must not accidentally expose native-CGB
+          * serial/speed/IR/palette/bank behavior to DMG software. */
+         ioamhram_[0x102] |= 0x02;
+         ioamhram_[0x14D] |= 0x81;
+         ioamhram_[0x156] |= 0xC1;
+         ioamhram_[0x16B] = 0xFF;
+         ioamhram_[0x170] |= 0x07;
+         ioamhram_[0x174] = 0xFF;
+      }
       bootloader.call_FF50();
       /* Some unlicensed mappers (currently Sachen MMC1) need to
        * leave a "locked" boot-time state when control transfers
@@ -1111,7 +1158,7 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 		dmaDestination_ = (dmaDestination_ & 0xFF00) | (data & 0xF0);
 		return;
 	case 0x55:
-		if (isCgb()) {
+		if (isCgb() && !lcd_.inDmgMode()) {
 			ioamhram_[0x155] = data & 0x7F;
 
 			if (lcd_.hdmaIsEnabled()) {
@@ -1132,17 +1179,17 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 
 		return;
 	case 0x56:
-		if (isCgb())
+		if (isCgb() && !lcd_.inDmgMode())
 			ioamhram_[0x156] = data | 0x3E;
 
 		return;
 	case 0x68:
-		if (isCgb())
+		if (isCgb() && !lcd_.inDmgMode())
 			ioamhram_[0x168] = data | 0x40;
 
 		return;
 	case 0x69:
-		if (isCgb()) {
+		if (isCgb() && !lcd_.inDmgMode()) {
 			unsigned index = ioamhram_[0x168] & 0x3F;
 			lcd_.cgbBgColorChange(index, data, cc);
 			ioamhram_[0x168] = (ioamhram_[0x168] & ~0x3F)
@@ -1151,12 +1198,12 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 
 		return;
 	case 0x6A:
-		if (isCgb())
+		if (isCgb() && !lcd_.inDmgMode())
 			ioamhram_[0x16A] = data | 0x40;
 
 		return;
 	case 0x6B:
-		if (isCgb()) {
+		if (isCgb() && !lcd_.inDmgMode()) {
 			unsigned index = ioamhram_[0x16A] & 0x3F;
 			lcd_.cgbSpColorChange(index, data, cc);
 			ioamhram_[0x16A] = (ioamhram_[0x16A] & ~0x3F)
@@ -1165,12 +1212,17 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 
 		return;
 	case 0x6C:
-		if (isCgb())
+		if (isCgb() && !lcd_.inDmgMode()) {
+			/* OPRI changes live priority while the real CGB bootstrap is
+			 * mapped. After FF50 the selected mode is locked. */
+			if (bootloader.active())
+				lcd_.setSpPriority(data & 1, cc);
 			ioamhram_[0x16C] = data | 0xFE;
+		}
 
 		return;
 	case 0x70:
-		if (isCgb()) {
+		if (isCgb() && !lcd_.inDmgMode()) {
 			cart_.setWrambank((data & 0x07) ? data & 0x07 : 1);
 			ioamhram_[0x170] = data | 0xF8;
 		}
@@ -1178,10 +1230,12 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 		return;
 	case 0x72:
 	case 0x73:
-	case 0x74:
 		if (isCgb())
 			break;
-
+		return;
+	case 0x74:
+		if (isCgb() && !lcd_.inDmgMode())
+			break;
 		return;
 	case 0x75:
 		if (isCgb())
