@@ -35,6 +35,13 @@ public:
 	long runFor(unsigned long cycles);
    unsigned long lastRunCycles() const { return lastRunCycles_; }
    void setAccumulator(unsigned char value) { a_ = value; } /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907 */
+   /* AURORA_GB_STANDALONE_DYNAMIC_R4_20260909
+    * The DMG post-boot template is A=01,C=13.  SGB software identifies the
+    * accessory from C=14; A distinguishes SGB1 (01) from SGB2 (FF). */
+   void setSgbPostBootState(bool sgb2) {
+      a_ = sgb2 ? 0xff : 0x01;
+      c = 0x14;
+   }
 	void setStatePtrs(SaveState &state);
 	void saveState(SaveState &state);
 	void loadState(SaveState const &state);

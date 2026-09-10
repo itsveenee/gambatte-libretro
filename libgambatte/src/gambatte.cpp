@@ -143,8 +143,10 @@ void GB::setScanlineCallback(void (*callback)(unsigned)) {
 void GB::setSgbPostBootState(bool sgb2) {
    /* AURORA_SGB_CLASSIC_PLUS_LINK_V2_20260907
     * bsnes-classic applies this immediately after load/reset when its
-    * internal SGB bootstrap is HLE'd instead of executed. */
-   p_->cpu.setAccumulator(sgb2 ? 0xff : 0x01);
+    * internal SGB bootstrap is HLE'd instead of executed.
+    * AURORA_GB_STANDALONE_DYNAMIC_R4_20260909: expose the complete SGB
+    * post-boot identity, including C=14, to standalone dynamic-SGB games. */
+   p_->cpu.setSgbPostBootState(sgb2);
 }
 
 void GB::setSgbVideoBuffer(gambatte::video_pixel_t *videoBuf, int pitch) {
@@ -197,6 +199,11 @@ bool GB::isLoaded() const {
 	 * been instantiated, which is a faithful "is a ROM loaded"
 	 * signal, so route through to it. */
 	return p_->cpu.mem_.loaded();
+}
+
+/* AURORA_GB_FINAL_R1_BOOT_ACTIVE_API_20260909 */
+bool GB::isBootloaderActive() const {
+   return p_->cpu.mem_.bootloader.active();
 }
 
 void GB::setDmgPaletteColor(unsigned palNum, unsigned colorNum, unsigned rgb32) {

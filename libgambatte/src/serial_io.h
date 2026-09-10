@@ -28,6 +28,12 @@ class SerialIO
 
 		virtual bool check(unsigned char out, unsigned char& in, bool& fastCgb) = 0;
 		virtual unsigned char send(unsigned char data, bool fastCgb) = 0;
+
+        /* AURORA_GB_STANDALONE_R5_ROUTE_BIOS_TURBO_20260909
+         * Most link peers use Gambatte's normal serial event scheduling.
+         * Accessories that physically supply an external clock may opt into
+         * immediate completion when check() accepts a byte. */
+        virtual bool drivesExternalClockImmediately() const { return false; }
 };
 
 }

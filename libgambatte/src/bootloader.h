@@ -35,6 +35,10 @@ public:
 
    void choosebank(bool inbootloader);
 
+   /* AURORA_GB_FINAL_R1_BOOT_ACTIVE_API_20260909
+    * True only while the real boot ROM is still mapped. */
+   bool active() const { return using_bootloader && !has_called_FF50; }
+
    void call_FF50();
 };
    

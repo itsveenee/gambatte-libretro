@@ -152,6 +152,9 @@ public:
 	
 	/** Returns true if a ROM image is loaded. */
 	bool isLoaded() const;
+
+   /* AURORA_GB_FINAL_R1_BOOT_ACTIVE_API_20260909 */
+   bool isBootloaderActive() const;
 	
    void saveState(void *data);
    /* Load a savestate previously produced by saveState. The size

@@ -682,24 +682,25 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 
 	switch (p & 0xFF) {
 	case 0x00:
-      /* AURORA_SGB_GAMBATTE_SHADE8_JOYP_SYNC_PERF_V3_20260908
-       * Match bsnes-plus: the SGB side observes P14/P15 TRANSITIONS, not
-       * arbitrary repeated FF00 stores with the same selector level. Feeding
-       * duplicates into the packet parser creates phantom strobes/bits. */
-      if ((data ^ ioamhram_[0x100]) & 0x30) {
-         if (sgbJoypCallback_) {
-            unsigned const oldLow = ioamhram_[0x100] & 0x0F;
-            unsigned const state = sgbJoypCallback_(
-                  sgbJoypUser_, data & 0x30, true) & 0x0F;
-            ioamhram_[0x100] =
-                  (ioamhram_[0x100] & ~0x3Fu) | (data & 0x30) | state;
-            if (state != 0x0F && oldLow == 0x0F)
-               intreq_.flagIrq(0x10);
-         } else {
-            ioamhram_[0x100] =
-                  (ioamhram_[0x100] & ~0x30u) | (data & 0x30);
-            updateInput();
-         }
+      /* AURORA_GB_STANDALONE_R6_JOYP_RESET_20260909
+       * Standalone dynamic SGB must observe EVERY FF00 write.  In particular,
+       * 00 is a packet-parser reset even when P14/P15 were already 00.  The
+       * callback itself rejects duplicate non-reset selector levels after it
+       * has honored that reset.  This mirrors mature SGB packet parsers and
+       * prevents MASK_EN / following commands from becoming one packet out of
+       * phase.  Ordinary Game Boy input keeps the old transition-only path. */
+      if (sgbJoypCallback_) {
+         unsigned const oldLow = ioamhram_[0x100] & 0x0F;
+         unsigned const state = sgbJoypCallback_(
+               sgbJoypUser_, data & 0x30, true) & 0x0F;
+         ioamhram_[0x100] =
+               (ioamhram_[0x100] & ~0x3Fu) | (data & 0x30) | state;
+         if (state != 0x0F && oldLow == 0x0F)
+            intreq_.flagIrq(0x10);
+      } else if ((data ^ ioamhram_[0x100]) & 0x30) {
+         ioamhram_[0x100] =
+               (ioamhram_[0x100] & ~0x30u) | (data & 0x30);
+         updateInput();
       }
 
 		return;
@@ -717,6 +718,43 @@ void Memory::nontrivial_ff_write(unsigned const p, unsigned data, unsigned long 
 			if (serial_io_ != 0)
 				receivedByte = serial_io_->send(ioamhram_[0x101], (data & isCgb() * 2));
 			startSerialTransfer(cc, receivedByte, (data & isCgb() * 2));
+      }
+      /* AURORA_GB_FINAL_R1_TURBO_EXTERNAL_KICK_20260909
+       * Turbo File GB supplies the serial clock externally. A game may HALT
+       * waiting for the serial IRQ immediately after setting SC bit 7; if we
+       * wait for Gambatte's later checkSerial() poll, that poll may never be
+       * reached. Ask an attached external endpoint now and schedule the same
+       * normal serial completion event when it is ready. Generic devices may
+       * return false and retain the old deferred-poll behaviour. */
+      else if ((data & 0x80) && serial_io_ != 0)
+      {
+         unsigned char receivedByte = 0xFF;
+         bool externalFastCgb = false;
+         /* AURORA_GB_FINAL_R2_EXTERNAL_SERIAL_GUARD_20260909
+          * updateSerial(cc) runs immediately above. If that call has just
+          * armed an older external request, do not poll/consume the attached
+          * endpoint a second time for this SC write.
+          *
+          * AURORA_GB_STANDALONE_R5_ROUTE_BIOS_TURBO_20260909
+          * Turbo File GB supplies the clock. RPG Tsukuru polls SC.7 waiting
+          * for external completion, so once that endpoint accepts the byte,
+          * complete the 8-bit transfer now: publish SB, clear SC.7 in the
+          * value that will be stored below, and raise serial IF. Generic
+          * SerialIO endpoints retain the old scheduled transfer path. */
+         if (intreq_.eventTime(intevent_serial) == disabled_time &&
+             serial_io_->check(ioamhram_[0x101], receivedByte, externalFastCgb))
+         {
+            if (serial_io_->drivesExternalClockImmediately())
+            {
+               ioamhram_[0x101] = receivedByte;
+               data &= ~0x80U;
+               serialCnt_ = 8;
+               intreq_.setEventTime<intevent_serial>(disabled_time);
+               intreq_.flagIrq(8);
+            }
+            else
+               startSerialTransfer(cc, receivedByte, externalFastCgb);
+         }
       }
 #else
 		if ((data & 0x81) == 0x81)
